@@ -30,10 +30,12 @@ options:
   action:
     description:
       - Action to take.
+      - servicegroup options were added in 2.0.
     required: true
     default: null
     choices: [ "downtime", "enable_alerts", "disable_alerts", "silence", "unsilence",
-               "silence_nagios", "unsilence_nagios", "command" ]
+               "silence_nagios", "unsilence_nagios", "command", "servicegroup_service_downtime",
+               "servicegroup_host_downtime" ]
   host:
     description:
       - Host to operate on in Nagios.
@@ -51,6 +53,12 @@ options:
        Only usable with the C(downtime) action.
     required: false
     default: Ansible
+  comment:
+    version_added: "2.0"
+    description:
+     - Comment for C(downtime) action.
+    required: false
+    default: Scheduling downtime
   minutes:
     description:
       - Minutes to schedule downtime for.
@@ -65,6 +73,11 @@ options:
     aliases: [ "service" ]
     required: true
     default: null
+  servicegroup:
+    version_added: "2.0"
+    description:
+      - the Servicegroup we want to set downtimes/alerts for.
+      B(Required) option when using the C(servicegroup_service_downtime) amd C(servicegroup_host_downtime).
   command:
     description:
       - The raw command to send to nagios, which
@@ -84,11 +97,21 @@ EXAMPLES = '''
 # schedule an hour of HOST downtime
 - nagios: action=downtime minutes=60 service=host host={{ inventory_hostname }}
 
+# schedule an hour of HOST downtime, with a comment describing the reason
+- nagios: action=downtime minutes=60 service=host host={{ inventory_hostname }}
+          comment='This host needs disciplined'
+
 # schedule downtime for ALL services on HOST
 - nagios: action=downtime minutes=45 service=all host={{ inventory_hostname }}
 
 # schedule downtime for a few services
 - nagios: action=downtime services=frob,foobar,qeuz host={{ inventory_hostname }}
+
+# set 30 minutes downtime for all services in servicegroup foo
+- nagios: action=servicegroup_service_downtime minutes=30 servicegroup=foo host={{ inventory_hostname }}
+
+# set 30 minutes downtime for all host in servicegroup foo
+- nagios: action=servicegroup_host_downtime minutes=30 servicegroup=foo host={{ inventory_hostname }}
 
 # enable SMART disk alerts
 - nagios: action=enable_alerts service=smart host={{ inventory_hostname }}
@@ -169,13 +192,18 @@ def main():
         'silence_nagios',
         'unsilence_nagios',
         'command',
+        'servicegroup_host_downtime',
+        'servicegroup_service_downtime',
         ]
+
 
     module = AnsibleModule(
         argument_spec=dict(
             action=dict(required=True, default=None, choices=ACTION_CHOICES),
             author=dict(default='Ansible'),
+            comment=dict(default='Scheduling downtime'),
             host=dict(required=False, default=None),
+            servicegroup=dict(required=False, default=None),
             minutes=dict(default=30),
             cmdfile=dict(default=which_cmdfile()),
             services=dict(default=None, aliases=['service']),
@@ -185,6 +213,7 @@ def main():
 
     action = module.params['action']
     host = module.params['host']
+    servicegroup = module.params['servicegroup']
     minutes = module.params['minutes']
     services = module.params['services']
     cmdfile = module.params['cmdfile']
@@ -209,6 +238,20 @@ def main():
         # Make sure there's an actual service selected
         if not services:
             module.fail_json(msg='no service selected to set downtime for')
+        # Make sure minutes is a number
+        try:
+            m = int(minutes)
+            if not isinstance(m, types.IntType):
+                module.fail_json(msg='minutes must be a number')
+        except Exception:
+            module.fail_json(msg='invalid entry for minutes')
+
+    ######################################################################
+
+    if action in ['servicegroup_service_downtime', 'servicegroup_host_downtime']:
+        # Make sure there's an actual servicegroup selected
+        if not servicegroup:
+            module.fail_json(msg='no servicegroup selected to set downtime for')
         # Make sure minutes is a number
         try:
             m = int(minutes)
@@ -258,7 +301,9 @@ class Nagios(object):
         self.module = module
         self.action = kwargs['action']
         self.author = kwargs['author']
+        self.comment = kwargs['comment']
         self.host = kwargs['host']
+        self.servicegroup = kwargs['servicegroup']
         self.minutes = int(kwargs['minutes'])
         self.cmdfile = kwargs['cmdfile']
         self.command = kwargs['command']
@@ -293,7 +338,7 @@ class Nagios(object):
                                   cmdfile=self.cmdfile)
 
     def _fmt_dt_str(self, cmd, host, duration, author=None,
-                    comment="Scheduling downtime", start=None,
+                    comment=None, start=None,
                     svc=None, fixed=1, trigger=0):
         """
         Format an external-command downtime string.
@@ -325,6 +370,9 @@ class Nagios(object):
 
         if not author:
             author = self.author
+
+        if not comment:
+            comment = self.comment
 
         if svc is not None:
             dt_args = [svc, str(start), str(end), str(fixed), str(trigger),
@@ -847,6 +895,12 @@ class Nagios(object):
                 self.schedule_svc_downtime(self.host,
                                            services=self.services,
                                            minutes=self.minutes)
+        elif self.action == "servicegroup_host_downtime":
+            if self.servicegroup:
+                self.schedule_servicegroup_host_downtime(servicegroup = self.servicegroup, minutes = self.minutes)
+        elif self.action == "servicegroup_service_downtime":
+            if self.servicegroup:
+                self.schedule_servicegroup_svc_downtime(servicegroup = self.servicegroup, minutes = self.minutes)
 
         # toggle the host AND service alerts
         elif self.action == 'silence':
