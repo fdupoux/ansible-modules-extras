@@ -1,6 +1,20 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-
+#
+# This file is part of Ansible
+#
+# Ansible is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Ansible is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 DOCUMENTATION = '''
 ---
 module: typetalk
@@ -25,37 +39,38 @@ options:
     description:
       - message body
     required: true
-requirements: [ urllib, urllib2, json ]
-author: '"Takashi Someda (@tksmd)" <someda@isenshi.com>'
+requirements: [ json ]
+author: "Takashi Someda (@tksmd)"
 '''
 
 EXAMPLES = '''
 - typetalk: client_id=12345 client_secret=12345 topic=1 msg="install completed"
 '''
 
-try:
-    import urllib
-except ImportError:
-    urllib = None
-
-try:
-    import urllib2
-except ImportError:
-    urllib2 = None
+import urllib
 
 try:
     import json
 except ImportError:
-    json = None
+    try:
+        import simplejson as json
+    except ImportError:
+        json = None
 
 
-def do_request(url, params, headers={}):
+def do_request(module, url, params, headers=None):
     data = urllib.urlencode(params)
+    if headers is None:
+        headers = dict()
     headers = dict(headers, **{
         'User-Agent': 'Ansible/typetalk module',
     })
-    return urllib2.urlopen(urllib2.Request(url, data, headers))
-
+    r, info = fetch_url(module, url, data=data, headers=headers)
+    if info['status'] != 200:
+        exc = ConnectionError(info['msg'])
+        exc.code = info['status']
+        raise exc
+    return r
 
 def get_access_token(client_id, client_secret):
     params = {
@@ -68,7 +83,7 @@ def get_access_token(client_id, client_secret):
     return json.load(res)['access_token']
 
 
-def send_message(client_id, client_secret, topic, msg):
+def send_message(module, client_id, client_secret, topic, msg):
     """
     send message to typetalk
     """
@@ -78,9 +93,9 @@ def send_message(client_id, client_secret, topic, msg):
         headers = {
             'Authorization': 'Bearer %s' % access_token,
         }
-        do_request(url, {'message': msg}, headers)
+        do_request(module, url, {'message': msg}, headers)
         return True, {'access_token': access_token}
-    except urllib2.HTTPError, e:
+    except ConnectionError, e:
         return False, e
 
 
@@ -96,15 +111,15 @@ def main():
         supports_check_mode=False
     )
 
-    if not (urllib and urllib2 and json):
-        module.fail_json(msg="urllib, urllib2 and json modules are required")
+    if not json:
+        module.fail_json(msg="json module is required")
 
     client_id = module.params["client_id"]
     client_secret = module.params["client_secret"]
     topic = module.params["topic"]
     msg = module.params["msg"]
 
-    res, error = send_message(client_id, client_secret, topic, msg)
+    res, error = send_message(module, client_id, client_secret, topic, msg)
     if not res:
         module.fail_json(msg='fail to send message with response code %s' % error.code)
 
@@ -113,4 +128,6 @@ def main():
 
 # import module snippets
 from ansible.module_utils.basic import *
-main()
+from ansible.module_utils.urls import *
+if __name__ == '__main__':
+    main()

@@ -25,7 +25,7 @@ short_description: Manage bower packages with bower
 description:
   - Manage bower packages with bower
 version_added: 1.9
-author: '"Michael Warkentin (@mwarkentin)" <mwarkentin@gmail.com>'
+author: "Michael Warkentin (@mwarkentin)"
 options:
   name:
     description:
@@ -86,7 +86,7 @@ class Bower(object):
 
     def _exec(self, args, run_in_check_mode=False, check_rc=True):
         if not self.module.check_mode or (self.module.check_mode and run_in_check_mode):
-            cmd = ["bower"] + args
+            cmd = ["bower"] + args + ['--config.interactive=false', '--allow-root']
 
             if self.name:
                 cmd.append(self.name_version)
@@ -108,7 +108,7 @@ class Bower(object):
         return ''
 
     def list(self):
-        cmd = ['list', '--json', '--config.interactive=false', '--allow-root']
+        cmd = ['list', '--json']
 
         installed = list()
         missing = list()
@@ -116,11 +116,15 @@ class Bower(object):
         data = json.loads(self._exec(cmd, True, False))
         if 'dependencies' in data:
             for dep in data['dependencies']:
-                if 'missing' in data['dependencies'][dep] and data['dependencies'][dep]['missing']:
+                dep_data = data['dependencies'][dep]
+                if dep_data.get('missing', False):
                     missing.append(dep)
-                elif data['dependencies'][dep]['pkgMeta']['version'] != data['dependencies'][dep]['update']['latest']:
+                elif \
+                  'version' in dep_data['pkgMeta'] and \
+                  'update' in dep_data and \
+                  dep_data['pkgMeta']['version'] != dep_data['update']['latest']:
                     outdated.append(dep)
-                elif 'incompatible' in data['dependencies'][dep] and data['dependencies'][dep]['incompatible']:
+                elif dep_data.get('incompatible', False):
                     outdated.append(dep)
                 else:
                     installed.append(dep)

@@ -1,11 +1,25 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-
+#
+# This file is part of Ansible
+#
+# Ansible is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Ansible is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 DOCUMENTATION = '''
 ---
 module: hipchat
 version_added: "1.2"
-short_description: Send a message to hipchat
+short_description: Send a message to hipchat.
 description:
    - Send a message to hipchat
 options:
@@ -56,30 +70,38 @@ options:
     version_added: 1.5.1
   api:
     description:
-      - API url if using a self-hosted hipchat server
+      - API url if using a self-hosted hipchat server. For hipchat api version 2 use C(/v2) path in URI
     required: false
     default: 'https://api.hipchat.com/v1'
     version_added: 1.6.0
 
 
-# informational: requirements for nodes
-requirements: [ urllib, urllib2 ]
+requirements: [ ]
 author: "WAKAYAMA Shirou (@shirou), BOURDEL Paul (@pb8226)"
 '''
 
 EXAMPLES = '''
-- hipchat: token=AAAAAA room=notify msg="Ansible task finished"
+- hipchat:  room=notify msg="Ansible task finished"
+
+# Use Hipchat API version 2
+
+- hipchat:
+    api: "https://api.hipchat.com/v2/"
+    token: OAUTH2_TOKEN
+    room: notify
+    msg: "Ansible task finished"
 '''
 
 # ===========================================
 # HipChat module specific support methods.
 #
 
+import urllib
+
 DEFAULT_URI = "https://api.hipchat.com/v1"
 
 MSG_URI_V1 = "/rooms/message"
 
-MSG_URI_V2 = "/room/{id_or_name}/message"
 NOTIFY_URI_V2 = "/room/{id_or_name}/notification"
 
 def send_msg_v1(module, token, room, msg_from, msg, msg_format='text',
@@ -94,11 +116,7 @@ def send_msg_v1(module, token, room, msg_from, msg, msg_format='text',
     params['message_format'] = msg_format
     params['color'] = color
     params['api'] = api
-
-    if notify:
-        params['notify'] = 1
-    else:
-        params['notify'] = 0
+    params['notify'] = int(notify)
 
     url = api + MSG_URI_V1 + "?auth_token=%s" % (token)
     data = urllib.urlencode(params)
@@ -115,7 +133,7 @@ def send_msg_v1(module, token, room, msg_from, msg, msg_format='text',
 
 
 def send_msg_v2(module, token, room, msg_from, msg, msg_format='text',
-             color='yellow', notify=False, api=MSG_URI_V2):
+             color='yellow', notify=False, api=NOTIFY_URI_V2):
     '''sending message to hipchat v2 server'''
     print "Sending message to v2 server"
 
@@ -125,13 +143,11 @@ def send_msg_v2(module, token, room, msg_from, msg, msg_format='text',
     body['message'] = msg
     body['color'] = color
     body['message_format'] = msg_format
+    body['notify'] = notify
 
-    if notify:
-        POST_URL = api + NOTIFY_URI_V2
-    else:
-        POST_URL = api + MSG_URI_V2
+    POST_URL = api + NOTIFY_URI_V2
 
-    url = POST_URL.replace('{id_or_name}',room)
+    url = POST_URL.replace('{id_or_name}', room)
     data = json.dumps(body)
 
     if module.check_mode:

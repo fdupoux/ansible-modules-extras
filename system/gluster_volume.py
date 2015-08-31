@@ -103,7 +103,7 @@ options:
 notes:
   - "Requires cli tools for GlusterFS on servers"
   - "Will add new bricks, but not remove them"
-author: '"Taneli Leppä (@rosmo)" <taneli@crasman.fi>'
+author: "Taneli Leppä (@rosmo)"
 """
 
 EXAMPLES = """
@@ -115,7 +115,7 @@ EXAMPLES = """
   gluster_volume: state=present name=test1 options='{performance.cache-size: 256MB}'
 
 - name: start gluster volume
-  gluster_volume: status=started name=test1
+  gluster_volume: state=started name=test1
 
 - name: limit usage
   gluster_volume: state=present name=test1 directory=/foo quota=20.0MB

@@ -26,7 +26,7 @@ short_description: Manage LXC Containers
 version_added: 1.8.0
 description:
   - Management of LXC containers
-author: '"Kevin Carter (@cloudnull)" <kevin.carter@rackspace.com>'
+author: "Kevin Carter (@cloudnull)"
 options:
     name:
         description:
@@ -39,6 +39,7 @@ options:
           - loop
           - btrfs
           - overlayfs
+          - zfs
         description:
           - Backend storage type for the container.
         required: false
@@ -173,9 +174,9 @@ options:
           - list of 'key=value' options to use when configuring a container.
         required: false
 requirements:
-  - 'lxc >= 1.0'
-  - 'python >= 2.6'
-  - 'python2-lxc >= 0.1'
+  - 'lxc >= 1.0 # OS package'
+  - 'python >= 2.6 # OS Package'
+  - 'lxc-python2 >= 0.1 # PIP Package from https://github.com/lxc/python2-lxc'
 notes:
   - Containers must have a unique name. If you attempt to create a container
     with a name that already exists in the users namespace the module will
@@ -195,7 +196,8 @@ notes:
     creating the archive.
   - If your distro does not have a package for "python2-lxc", which is a
     requirement for this module, it can be installed from source at
-    "https://github.com/lxc/python2-lxc"
+    "https://github.com/lxc/python2-lxc" or installed via pip using the package
+    name lxc-python2.
 """
 
 EXAMPLES = """
@@ -383,9 +385,9 @@ EXAMPLES = """
 try:
     import lxc
 except ImportError:
-    msg = 'The lxc module is not importable. Check the requirements.'
-    print("failed=True msg='%s'" % msg)
-    raise SystemExit(msg)
+    HAS_LXC = False
+else:
+    HAS_LXC = True
 
 
 # LXC_COMPRESSION_MAP is a map of available compression types when creating
@@ -453,6 +455,9 @@ LXC_BACKING_STORE = {
     ],
     'overlayfs': [
         'lv_name', 'vg_name', 'fs_type', 'fs_size', 'thinpool', 'zfs_root'
+    ],
+    'zfs': [
+        'lv_name', 'vg_name', 'fs_type', 'fs_size', 'thinpool'
     ]
 }
 
@@ -709,7 +714,7 @@ class LxcContainerManagement(object):
             for option_line in container_config:
                 # Look for key in config
                 if option_line.startswith(key):
-                    _, _value = option_line.split('=')
+                    _, _value = option_line.split('=', 1)
                     config_value = ' '.join(_value.split())
                     line_index = container_config.index(option_line)
                     # If the sanitized values don't match replace them
@@ -1065,6 +1070,9 @@ class LxcContainerManagement(object):
             if self._get_state() != 'stopped':
                 self.container.stop()
                 self.state_change = True
+
+            # Run container startup
+            self._container_startup()
 
             # Check if the container needs to have an archive created.
             self._check_archive()
@@ -1705,6 +1713,11 @@ def main():
         ),
         supports_check_mode=False,
     )
+
+    if not HAS_LXC:
+        module.fail_json(
+            msg='The `lxc` module is not importable. Check the requirements.'
+        )
 
     lv_name = module.params.get('lv_name')
     if not lv_name:

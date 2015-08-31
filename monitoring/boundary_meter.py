@@ -34,11 +34,10 @@ short_description: Manage boundary meters
 description:
     - This module manages boundary meters
 version_added: "1.3"
-author: '"curtis (@ccollicutt)" <curtis@serverascode.com>'
+author: "curtis (@ccollicutt)"
 requirements:
     - Boundary API access
     - bprobe is required to send data, but not to register a meter
-    - Python urllib2
 options:
     name:
         description:
@@ -252,5 +251,6 @@ def main():
 # import module snippets
 from ansible.module_utils.basic import *
 from ansible.module_utils.urls import *
-main()
+if __name__ == '__main__':
+    main()
 

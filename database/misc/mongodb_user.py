@@ -99,7 +99,7 @@ notes:
     - Requires the pymongo Python package on the remote host, version 2.4.2+. This
       can be installed using pip or the OS package manager. @see http://api.mongodb.org/python/current/installation.html
 requirements: [ "pymongo" ]
-author: '"Elliott Foster (@elliotttf)" <elliott@fourkitchens.com>'
+author: "Elliott Foster (@elliotttf)"
 '''
 
 EXAMPLES = '''
@@ -225,10 +225,10 @@ def main():
     update_password = module.params['update_password']
 
     try:
-    	if replica_set:
-    	   client = MongoClient(login_host, int(login_port), replicaset=replica_set, ssl=ssl)
-    	else:
-    	   client = MongoClient(login_host, int(login_port), ssl=ssl)
+        if replica_set:
+            client = MongoClient(login_host, int(login_port), replicaset=replica_set, ssl=ssl)
+        else:
+            client = MongoClient(login_host, int(login_port), ssl=ssl)
 
         if login_user is None and login_password is None:
             mongocnf_creds = load_mongocnf()

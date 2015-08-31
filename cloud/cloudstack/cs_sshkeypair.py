@@ -27,7 +27,7 @@ description:
     - If no key was found and no public key was provided and a new SSH
       private/public key pair will be created and the private key will be returned.
 version_added: '2.0'
-author: '"René Moser (@resmo)" <mail@renemoser.net>'
+author: "René Moser (@resmo)"
 options:
   name:
     description:
@@ -77,6 +77,11 @@ EXAMPLES = '''
 
 RETURN = '''
 ---
+id:
+  description: UUID of the SSH public key.
+  returned: success
+  type: string
+  sample: a6f7a5fc-43f8-11e5-a151-feff819cdc9f
 name:
   description: Name of the SSH public key.
   returned: success
@@ -112,7 +117,11 @@ from ansible.module_utils.cloudstack import *
 class AnsibleCloudStackSshKey(AnsibleCloudStack):
 
     def __init__(self, module):
-        AnsibleCloudStack.__init__(self, module)
+        super(AnsibleCloudStackSshKey, self).__init__(module)
+        self.returns = {
+            'privatekey':   'private_key',
+            'fingerprint':  'fingerprint',
+        }
         self.ssh_key = None
 
 
@@ -189,16 +198,6 @@ class AnsibleCloudStackSshKey(AnsibleCloudStack):
         return self.ssh_key
 
 
-    def get_result(self, ssh_key):
-        if ssh_key:
-            if 'fingerprint' in ssh_key:
-                self.result['fingerprint'] = ssh_key['fingerprint']
-            if 'name' in ssh_key:
-                self.result['name'] = ssh_key['name']
-            if 'privatekey' in ssh_key:
-                self.result['private_key'] = ssh_key['privatekey']
-        return self.result
-
 
     def _get_ssh_fingerprint(self, public_key):
         key = sshpubkeys.SSHKey(public_key)
@@ -249,11 +248,9 @@ def main():
     except CloudStackException, e:
         module.fail_json(msg='CloudStackException: %s' % str(e))
 
-    except Exception, e:
-        module.fail_json(msg='Exception: %s' % str(e))
-
     module.exit_json(**result)
 
 # import module snippets
 from ansible.module_utils.basic import *
-main()
+if __name__ == '__main__':
+    main()

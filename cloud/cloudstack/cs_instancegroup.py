@@ -25,7 +25,7 @@ short_description: Manages instance groups on Apache CloudStack based clouds.
 description:
     - Create and remove instance groups.
 version_added: '2.0'
-author: '"René Moser (@resmo)" <mail@renemoser.net>'
+author: "René Moser (@resmo)"
 options:
   name:
     description:
@@ -71,7 +71,7 @@ EXAMPLES = '''
 RETURN = '''
 ---
 id:
-  description: ID of the instance group.
+  description: UUID of the instance group.
   returned: success
   type: string
   sample: 04589590-ac63-4ffc-93f5-b698b8ac38b6
@@ -115,7 +115,7 @@ from ansible.module_utils.cloudstack import *
 class AnsibleCloudStackInstanceGroup(AnsibleCloudStack):
 
     def __init__(self, module):
-        AnsibleCloudStack.__init__(self, module)
+        super(AnsibleCloudStackInstanceGroup, self).__init__(module)
         self.instance_group = None
 
 
@@ -169,23 +169,6 @@ class AnsibleCloudStackInstanceGroup(AnsibleCloudStack):
         return instance_group
 
 
-    def get_result(self, instance_group):
-        if instance_group:
-            if 'id' in instance_group:
-                self.result['id'] = instance_group['id']
-            if 'created' in instance_group:
-                self.result['created'] = instance_group['created']
-            if 'name' in instance_group:
-                self.result['name'] = instance_group['name']
-            if 'project' in instance_group:
-                self.result['project'] = instance_group['project']
-            if 'domain' in instance_group:
-                self.result['domain'] = instance_group['domain']
-            if 'account' in instance_group:
-                self.result['account'] = instance_group['account']
-        return self.result
-
-
 def main():
     module = AnsibleModule(
         argument_spec = dict(
@@ -223,11 +206,9 @@ def main():
     except CloudStackException, e:
         module.fail_json(msg='CloudStackException: %s' % str(e))
 
-    except Exception, e:
-        module.fail_json(msg='Exception: %s' % str(e))
-
     module.exit_json(**result)
 
 # import module snippets
 from ansible.module_utils.basic import *
-main()
+if __name__ == '__main__':
+    main()

@@ -30,7 +30,7 @@ requirements:
   - pyhcl
   - requests
 version_added: "2.0"
-author: '"Steve Gargan (@sgargan)" <steve.gargan@gmail.com>'
+author: "Steve Gargan (@sgargan)"
 options:
     mgmt_token:
         description:
@@ -92,7 +92,6 @@ EXAMPLES = '''
 '''
 
 import sys
-import urllib2
 
 try:
     import consul
@@ -318,4 +317,5 @@ def main():
 
 # import module snippets
 from ansible.module_utils.basic import *
-main()
+if __name__ == '__main__':
+    main()
