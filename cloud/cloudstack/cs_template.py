@@ -86,6 +86,12 @@ options:
       - Only used if C(state) is present.
     required: false
     default: false
+  cross_zones:
+    description:
+      - Whether the template should be syned across zones.
+      - Only used if C(state) is present.
+    required: false
+    default: false
   project:
     description:
       - Name of the project the template to be registered in.
@@ -185,9 +191,8 @@ EXAMPLES = '''
     url: "http://packages.shapeblue.com/systemvmtemplate/4.5/systemvm64template-4.5-vmware.ova"
     hypervisor: VMware
     format: OVA
-    zone: tokio-ix
+    cross_zones: yes
     os_type: Debian GNU/Linux 7(64-bit)
-    is_routing: yes
 
 # Create a template from a stopped virtual machine's volume
 - local_action:
@@ -456,10 +461,14 @@ class AnsibleCloudStackTemplate(AnsibleCloudStack):
             args['isrouting']       = self.module.params.get('is_routing')
             args['sshkeyenabled']   = self.module.params.get('sshkey_enabled')
             args['hypervisor']      = self.get_hypervisor()
-            args['zoneid']          = self.get_zone(key='id')
             args['domainid']        = self.get_domain(key='id')
             args['account']         = self.get_account(key='name')
             args['projectid']       = self.get_project(key='id')
+
+            if not self.module.params.get('cross_zones'):
+                args['zoneid'] = self.get_zone(key='id')
+            else:
+                args['zoneid'] = -1
 
             if not self.module.check_mode:
                 res = self.cs.registerTemplate(**args)
@@ -473,10 +482,12 @@ class AnsibleCloudStackTemplate(AnsibleCloudStack):
         args                    = {}
         args['isready']         = self.module.params.get('is_ready')
         args['templatefilter']  = self.module.params.get('template_filter')
-        args['zoneid']          = self.get_zone(key='id')
         args['domainid']        = self.get_domain(key='id')
         args['account']         = self.get_account(key='name')
         args['projectid']       = self.get_project(key='id')
+
+        if not self.module.params.get('cross_zones'):
+            args['zoneid'] = self.get_zone(key='id')
 
         # if checksum is set, we only look on that.
         checksum = self.module.params.get('checksum')
@@ -490,7 +501,7 @@ class AnsibleCloudStackTemplate(AnsibleCloudStack):
                 return templates['template'][0]
             else:
                 for i in templates['template']:
-                    if i['checksum'] == checksum:
+                    if 'checksum' in i and i['checksum'] == checksum:
                         return i
         return None
 
@@ -518,48 +529,49 @@ class AnsibleCloudStackTemplate(AnsibleCloudStack):
 
 
 def main():
+    argument_spec = cs_argument_spec()
+    argument_spec.update(dict(
+        name = dict(required=True),
+        display_text = dict(default=None),
+        url = dict(default=None),
+        vm = dict(default=None),
+        snapshot = dict(default=None),
+        os_type = dict(default=None),
+        is_ready = dict(type='bool', choices=BOOLEANS, default=False),
+        is_public = dict(type='bool', choices=BOOLEANS, default=True),
+        is_featured = dict(type='bool', choices=BOOLEANS, default=False),
+        is_dynamically_scalable = dict(type='bool', choices=BOOLEANS, default=False),
+        is_extractable = dict(type='bool', choices=BOOLEANS, default=False),
+        is_routing = dict(type='bool', choices=BOOLEANS, default=False),
+        checksum = dict(default=None),
+        template_filter = dict(default='self', choices=['featured', 'self', 'selfexecutable', 'sharedexecutable', 'executable', 'community']),
+        hypervisor = dict(choices=['KVM', 'VMware', 'BareMetal', 'XenServer', 'LXC', 'HyperV', 'UCS', 'OVM', 'Simulator'], default=None),
+        requires_hvm = dict(type='bool', choices=BOOLEANS, default=False),
+        password_enabled = dict(type='bool', choices=BOOLEANS, default=False),
+        template_tag = dict(default=None),
+        sshkey_enabled = dict(type='bool', choices=BOOLEANS, default=False),
+        format = dict(choices=['QCOW2', 'RAW', 'VHD', 'OVA'], default=None),
+        details = dict(default=None),
+        bits = dict(type='int', choices=[ 32, 64 ], default=64),
+        state = dict(choices=['present', 'absent'], default='present'),
+        cross_zones = dict(type='bool', choices=BOOLEANS, default=False),
+        zone = dict(default=None),
+        domain = dict(default=None),
+        account = dict(default=None),
+        project = dict(default=None),
+        poll_async = dict(type='bool', choices=BOOLEANS, default=True),
+    ))
+
+    required_together = cs_required_together()
+    required_together.extend([
+        ['format', 'url', 'hypervisor'],
+    ])
+
     module = AnsibleModule(
-        argument_spec = dict(
-            name = dict(required=True),
-            display_text = dict(default=None),
-            url = dict(default=None),
-            vm = dict(default=None),
-            snapshot = dict(default=None),
-            os_type = dict(default=None),
-            is_ready = dict(type='bool', choices=BOOLEANS, default=False),
-            is_public = dict(type='bool', choices=BOOLEANS, default=True),
-            is_featured = dict(type='bool', choices=BOOLEANS, default=False),
-            is_dynamically_scalable = dict(type='bool', choices=BOOLEANS, default=False),
-            is_extractable = dict(type='bool', choices=BOOLEANS, default=False),
-            is_routing = dict(type='bool', choices=BOOLEANS, default=False),
-            checksum = dict(default=None),
-            template_filter = dict(default='self', choices=['featured', 'self', 'selfexecutable', 'sharedexecutable', 'executable', 'community']),
-            hypervisor = dict(choices=['KVM', 'VMware', 'BareMetal', 'XenServer', 'LXC', 'HyperV', 'UCS', 'OVM', 'Simulator'], default=None),
-            requires_hvm = dict(type='bool', choices=BOOLEANS, default=False),
-            password_enabled = dict(type='bool', choices=BOOLEANS, default=False),
-            template_tag = dict(default=None),
-            sshkey_enabled = dict(type='bool', choices=BOOLEANS, default=False),
-            format = dict(choices=['QCOW2', 'RAW', 'VHD', 'OVA'], default=None),
-            details = dict(default=None),
-            bits = dict(type='int', choices=[ 32, 64 ], default=64),
-            state = dict(choices=['present', 'absent'], default='present'),
-            zone = dict(default=None),
-            domain = dict(default=None),
-            account = dict(default=None),
-            project = dict(default=None),
-            poll_async = dict(type='bool', choices=BOOLEANS, default=True),
-            api_key = dict(default=None),
-            api_secret = dict(default=None),
-            api_url = dict(default=None),
-            api_http_method = dict(choices=['get', 'post'], default='get'),
-            api_timeout = dict(type='int', default=10),
-        ),
+        argument_spec=argument_spec,
+        required_together=required_together,
         mutually_exclusive = (
             ['url', 'vm'],
-        ),
-        required_together = (
-            ['api_key', 'api_secret', 'api_url'],
-            ['format', 'url', 'hypervisor'],
         ),
         supports_check_mode=True
     )

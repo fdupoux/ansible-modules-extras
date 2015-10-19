@@ -46,7 +46,9 @@ options:
             - Comment associated with the zone
         required: false
         default: ''
-extends_documentation_fragment: aws
+extends_documentation_fragment:
+    - aws
+    - ec2
 author: "Christopher Troup (@minichate)"
 '''
 
@@ -64,15 +66,14 @@ except ImportError:
 
 
 def main():
-    module = AnsibleModule(
-        argument_spec=dict(
+    argument_spec = ec2_argument_spec()
+    argument_spec.update(dict(
             zone=dict(required=True),
             state=dict(default='present', choices=['present', 'absent']),
             vpc_id=dict(default=None),
             vpc_region=dict(default=None),
-            comment=dict(default=''),
-        )
-    )
+            comment=dict(default='')))
+    module = AnsibleModule(argument_spec=argument_spec)
 
     if not HAS_BOTO:
         module.fail_json(msg='boto required for this module')
@@ -82,6 +83,9 @@ def main():
     vpc_id = module.params.get('vpc_id')
     vpc_region = module.params.get('vpc_region')
     comment = module.params.get('comment')
+
+    if zone_in[-1:] != '.':
+        zone_in += "."
 
     private_zone = vpc_id is not None and vpc_region is not None
 

@@ -74,8 +74,10 @@ options:
   source_dest_check:
     description:
       - By default, interfaces perform source/destination checks. NAT instances however need this check to be disabled. You can only specify this flag when the interface is being modified, not on creation.
-    required: false  
-extends_documentation_fragment: aws
+    required: false
+extends_documentation_fragment:
+    - aws
+    - ec2
 '''
 
 EXAMPLES = '''
@@ -213,10 +215,10 @@ def create_eni(connection, module):
                 except BotoServerError as ex:
                     eni.delete()
                     raise
+                # Wait to allow creation / attachment to finish
+                wait_for_eni(eni, "attached")
+                eni.update()
             changed = True
-            # Wait to allow creation / attachment to finish
-            wait_for_eni(eni, "attached")
-            eni.update()
             
     except BotoServerError as e:
         module.fail_json(msg=get_error_message(e.args[2]))

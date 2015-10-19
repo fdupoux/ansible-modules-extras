@@ -53,6 +53,21 @@ options:
       - If not set, first found service offering is used.
     required: false
     default: null
+  cpu:
+    description:
+      - The number of CPUs to allocate to the instance, used with custom service offerings
+    required: false
+    default: null
+  cpu_speed:
+    description:
+      - The clock speed/shares allocated to the instance, used with custom service offerings
+    required: false
+    default: null
+  memory:
+    description:
+      - The memory allocated to the instance, used with custom service offerings
+    required: false
+    default: null
   template:
     description:
       - Name or id of the template to be used for creating the new instance.
@@ -387,7 +402,6 @@ class AnsibleCloudStackInstance(AnsibleCloudStack):
             'isoname':              'iso',
             'templatename':         'template',
             'keypair':              'ssh_key',
-            'securitygroup':        'security_group',
         }
         self.instance = None
         self.template = None
@@ -547,8 +561,20 @@ class AnsibleCloudStackInstance(AnsibleCloudStack):
             user_data = base64.b64encode(user_data)
         return user_data
 
+    def get_details(self):
+        res = None
+        cpu = self.module.params.get('cpu')
+        cpu_speed = self.module.params.get('cpu_speed')
+        memory = self.module.params.get('memory')
+        if all([cpu, cpu_speed, memory]):
+            res = [{
+                'cpuNumber': cpu,
+                'cpuSpeed': cpu_speed,
+                'memory': memory,
+            }]
+        return res
 
-    def deploy_instance(self):
+    def deploy_instance(self, start_vm=True):
         self.result['changed'] = True
         networkids = self.get_network_ids()
         if networkids is not None:
@@ -573,9 +599,11 @@ class AnsibleCloudStackInstance(AnsibleCloudStack):
         args['group']               = self.module.params.get('group')
         args['keypair']             = self.module.params.get('ssh_key')
         args['size']                = self.module.params.get('disk_size')
+        args['startvm']             = start_vm
         args['rootdisksize']        = self.module.params.get('root_disk_size')
         args['securitygroupnames']  = ','.join(self.module.params.get('security_groups'))
         args['affinitygroupnames']  = ','.join(self.module.params.get('affinity_groups'))
+        args['details']             = self.get_details()
 
         template_iso = self.get_template_or_iso()
         if 'hypervisor' not in template_iso:
@@ -700,10 +728,12 @@ class AnsibleCloudStackInstance(AnsibleCloudStack):
 
     def stop_instance(self):
         instance = self.get_instance()
-        if not instance:
-            self.module.fail_json(msg="Instance named '%s' not found" % self.module.params.get('name'))
 
-        if instance['state'].lower() in ['stopping', 'stopped']:
+        if not instance:
+            instance = self.deploy_instance(start_vm=False)
+            return instance
+
+        elif instance['state'].lower() in ['stopping', 'stopped']:
             return instance
 
         if instance['state'].lower() in ['starting', 'running']:
@@ -722,10 +752,12 @@ class AnsibleCloudStackInstance(AnsibleCloudStack):
 
     def start_instance(self):
         instance = self.get_instance()
-        if not instance:
-            self.module.fail_json(msg="Instance named '%s' not found" % module.params.get('name'))
 
-        if instance['state'].lower() in ['starting', 'running']:
+        if not instance:
+            instance = self.deploy_instance()
+            return instance
+
+        elif instance['state'].lower() in ['starting', 'running']:
             return instance
 
         if instance['state'].lower() in ['stopped', 'stopping']:
@@ -744,10 +776,12 @@ class AnsibleCloudStackInstance(AnsibleCloudStack):
 
     def restart_instance(self):
         instance = self.get_instance()
-        if not instance:
-            module.fail_json(msg="Instance named '%s' not found" % self.module.params.get('name'))
 
-        if instance['state'].lower() in [ 'running', 'starting' ]:
+        if not instance:
+            instance = self.deploy_instance()
+            return instance
+
+        elif instance['state'].lower() in [ 'running', 'starting' ]:
             self.result['changed'] = True
             if not self.module.check_mode:
                 instance = self.cs.rebootVirtualMachine(id=instance['id'])
@@ -784,46 +818,50 @@ class AnsibleCloudStackInstance(AnsibleCloudStack):
         return self.result
 
 def main():
+    argument_spec = cs_argument_spec()
+    argument_spec.update(dict(
+        name = dict(required=True),
+        display_name = dict(default=None),
+        group = dict(default=None),
+        state = dict(choices=['present', 'deployed', 'started', 'stopped', 'restarted', 'absent', 'destroyed', 'expunged'], default='present'),
+        service_offering = dict(default=None),
+        cpu = dict(default=None, type='int'),
+        cpu_speed = dict(default=None, type='int'),
+        memory = dict(default=None, type='int'),
+        template = dict(default=None),
+        iso = dict(default=None),
+        networks = dict(type='list', aliases=[ 'network' ], default=None),
+        ip_to_networks = dict(type='list', aliases=['ip_to_network'], default=None),
+        ip_address = dict(defaul=None),
+        ip6_address = dict(defaul=None),
+        disk_offering = dict(default=None),
+        disk_size = dict(type='int', default=None),
+        root_disk_size = dict(type='int', default=None),
+        keyboard = dict(choices=['de', 'de-ch', 'es', 'fi', 'fr', 'fr-be', 'fr-ch', 'is', 'it', 'jp', 'nl-be', 'no', 'pt', 'uk', 'us'], default=None),
+        hypervisor = dict(choices=['KVM', 'VMware', 'BareMetal', 'XenServer', 'LXC', 'HyperV', 'UCS', 'OVM', 'Simulator'], default=None),
+        security_groups = dict(type='list', aliases=[ 'security_group' ], default=[]),
+        affinity_groups = dict(type='list', aliases=[ 'affinity_group' ], default=[]),
+        domain = dict(default=None),
+        account = dict(default=None),
+        project = dict(default=None),
+        user_data = dict(default=None),
+        zone = dict(default=None),
+        ssh_key = dict(default=None),
+        force = dict(choices=BOOLEANS, default=False),
+        tags = dict(type='list', aliases=[ 'tag' ], default=None),
+        poll_async = dict(choices=BOOLEANS, default=True),
+    ))
+
+    required_together = cs_required_together()
+    required_together.extend([
+        ['cpu', 'cpu_speed', 'memory'],
+    ])
+
     module = AnsibleModule(
-        argument_spec = dict(
-            name = dict(required=True),
-            display_name = dict(default=None),
-            group = dict(default=None),
-            state = dict(choices=['present', 'deployed', 'started', 'stopped', 'restarted', 'absent', 'destroyed', 'expunged'], default='present'),
-            service_offering = dict(default=None),
-            template = dict(default=None),
-            iso = dict(default=None),
-            networks = dict(type='list', aliases=[ 'network' ], default=None),
-            ip_to_networks = dict(type='list', aliases=['ip_to_network'], default=None),
-            ip_address = dict(defaul=None),
-            ip6_address = dict(defaul=None),
-            disk_offering = dict(default=None),
-            disk_size = dict(type='int', default=None),
-            root_disk_size = dict(type='int', default=None),
-            keyboard = dict(choices=['de', 'de-ch', 'es', 'fi', 'fr', 'fr-be', 'fr-ch', 'is', 'it', 'jp', 'nl-be', 'no', 'pt', 'uk', 'us'], default=None),
-            hypervisor = dict(choices=['KVM', 'VMware', 'BareMetal', 'XenServer', 'LXC', 'HyperV', 'UCS', 'OVM', 'Simulator'], default=None),
-            security_groups = dict(type='list', aliases=[ 'security_group' ], default=[]),
-            affinity_groups = dict(type='list', aliases=[ 'affinity_group' ], default=[]),
-            domain = dict(default=None),
-            account = dict(default=None),
-            project = dict(default=None),
-            user_data = dict(default=None),
-            zone = dict(default=None),
-            ssh_key = dict(default=None),
-            force = dict(choices=BOOLEANS, default=False),
-            tags = dict(type='list', aliases=[ 'tag' ], default=None),
-            poll_async = dict(choices=BOOLEANS, default=True),
-            api_key = dict(default=None),
-            api_secret = dict(default=None, no_log=True),
-            api_url = dict(default=None),
-            api_http_method = dict(choices=['get', 'post'], default='get'),
-            api_timeout = dict(type='int', default=10),
-        ),
+        argument_spec=argument_spec,
+        required_together=required_together,
         mutually_exclusive = (
             ['template', 'iso'],
-        ),
-        required_together = (
-            ['api_key', 'api_secret', 'api_url'],
         ),
         supports_check_mode=True
     )

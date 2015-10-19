@@ -1,4 +1,4 @@
-#!/bin/python
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 # (c) 2015, Joseph Callen <jcallen () csc.com>
@@ -24,14 +24,14 @@ module: vmware_target_canonical_facts
 short_description: Return canonical (NAA) from an ESXi host
 description:
     - Return canonical (NAA) from an ESXi host based on SCSI target ID
-version_added: 2.0
+version_added: "2.0"
 author: Joseph Callen
 notes:
 requirements:
     - Tested on vSphere 5.5
     - PyVmomi installed
 options:
- hostname:
+    hostname:
         description:
             - The hostname or IP address of the vSphere vCenter
         required: True

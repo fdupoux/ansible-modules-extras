@@ -52,6 +52,7 @@ options:
         required: false
 requirements:
     - kazoo >= 2.1
+    - python >= 2.6
 author: "Trey Perry (@treyperry)"
 """
 
@@ -121,7 +122,7 @@ def main():
 
     command_type = 'op' if 'op' in module.params and module.params['op'] is not None else 'state'
     method = module.params[command_type]
-    result, result_dict = command_dict[command_type][method]()
+    result, result_dict = command_dict[command_type][method]
     zoo.shutdown()
 
     if result:

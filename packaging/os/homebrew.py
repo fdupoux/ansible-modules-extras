@@ -3,6 +3,7 @@
 
 # (c) 2013, Andrew Dunham <andrew@du.nham.ca>
 # (c) 2013, Daniel Jaouen <dcj24@cornell.edu>
+# (c) 2015, Indrajit Raychaudhuri <irc+code@indrajit.com>
 #
 # Based on macports (Jimmy Tang <jcftang@gmail.com>)
 #
@@ -23,6 +24,7 @@ DOCUMENTATION = '''
 ---
 module: homebrew
 author:
+    - "Indrajit Raychaudhuri (@indrajitr)"
     - "Daniel Jaouen (@danieljaouen)"
     - "Andrew Dunham (@andrew-d)"
 short_description: Package manager for Homebrew
@@ -45,13 +47,13 @@ options:
         description:
             - update homebrew itself first
         required: false
-        default: "no"
+        default: no
         choices: [ "yes", "no" ]
     upgrade_all:
         description:
             - upgrade all homebrew packages
         required: false
-        default: "no"
+        default: no
         choices: [ "yes", "no" ]
     install_options:
         description:
@@ -119,6 +121,7 @@ class Homebrew(object):
         /                   # slash (for taps)
         \+                  # plusses
         -                   # dashes
+        :                   # colons (for URLs)
     '''
 
     INVALID_PATH_REGEX        = _create_regex_group(VALID_PATH_CHARS)
@@ -394,18 +397,17 @@ class Homebrew(object):
 
         return False
 
-    def _outdated_packages(self):
-        rc, out, err = self.module.run_command([
-            self.brew_path,
-            'outdated',
-        ])
-        return [line.split(' ')[0].strip() for line in out.split('\n') if line]
-
     def _current_package_is_outdated(self):
         if not self.valid_package(self.current_package):
             return False
 
-        return self.current_package in self._outdated_packages()
+        rc, out, err = self.module.run_command([
+            self.brew_path,
+            'outdated',
+            self.current_package,
+        ])
+
+        return rc != 0
 
     def _current_package_is_installed_from_head(self):
         if not Homebrew.valid_package(self.current_package):
@@ -763,7 +765,11 @@ class Homebrew(object):
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            name=dict(aliases=["pkg"], required=False),
+            name=dict(
+                aliases=["pkg", "package", "formula"],
+                required=False,
+                type='list',
+            ),
             path=dict(required=False),
             state=dict(
                 default="present",
@@ -775,12 +781,12 @@ def main():
                 ],
             ),
             update_homebrew=dict(
-                default="no",
+                default=False,
                 aliases=["update-brew"],
                 type='bool',
             ),
             upgrade_all=dict(
-                default="no",
+                default=False,
                 aliases=["upgrade"],
                 type='bool',
             ),
@@ -795,7 +801,7 @@ def main():
     p = module.params
 
     if p['name']:
-        packages = p['name'].split(',')
+        packages = p['name']
     else:
         packages = None
 
@@ -839,4 +845,3 @@ from ansible.module_utils.basic import *
 
 if __name__ == '__main__':
     main()
-
